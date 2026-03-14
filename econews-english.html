@@ -123,6 +123,32 @@
     .paste-area p  { font-size: .83rem; color: var(--muted); margin-bottom: 12px; line-height: 1.65; }
     .paste-sites { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 16px; }
     .paste-sites span { background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: .74rem; color: var(--muted); }
+
+    /* ══ FREE LINKS ══ */
+    .free-news-block { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 10px; margin-bottom: 18px; }
+    .free-news-hd { font-size: .9rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; font-family: sans-serif; }
+    .free-news-sub { font-size: .76rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+    .site-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .site-btn {
+      padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: #fff; font-size: .78rem; font-family: sans-serif;
+      cursor: pointer; transition: all .18s; color: var(--text); min-height: 34px;
+    }
+    .site-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+    .art-links-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .art-link-item {
+      display: flex; align-items: flex-start; gap: 10px; padding: 10px 13px;
+      background: #fff; border-bottom: 1px solid var(--border);
+      text-decoration: none; color: var(--text); transition: background .15s;
+    }
+    .art-link-item:last-child { border-bottom: none; }
+    .art-link-item:hover { background: var(--accent-l); }
+    .art-link-title { font-size: .84rem; line-height: 1.5; flex: 1; }
+    .art-link-date { font-size: .71rem; color: var(--muted); white-space: nowrap; font-family: sans-serif; padding-top: 2px; flex-shrink: 0; }
+    .art-links-loading { text-align: center; padding: 22px; color: var(--muted); font-family: sans-serif; font-size: .84rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .art-links-err { padding: 14px; color: var(--muted); font-family: sans-serif; font-size: .82rem; text-align: center; }
+    .art-links-direct { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text); transition: background .15s; }
+    .art-links-direct:hover { background: var(--accent-l); }
     .paste-title-in {
       width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
       padding: 10px 13px; font-size: .9rem; font-family: sans-serif;
@@ -441,10 +467,17 @@
   <div class="tab-pane hidden" id="pane2">
     <div class="paste-area">
       <h3>📋 記事を貼り付けて学習</h3>
-      <p>下記など無料サイトの記事をコピーして貼り付けてください。</p>
-      <div class="paste-sites">
-        <span>AP News</span><span>Reuters</span><span>NPR Business</span><span>CNBC</span><span>Investopedia</span>
+
+      <!-- 無料ニュースリンクセクション -->
+      <div class="free-news-block">
+        <div class="free-news-hd">📰 最新記事を選んで貼り付け</div>
+        <div class="free-news-sub">サイトを選んで記事を開き、本文をコピーして下の欄に貼り付けてください。</div>
+        <div class="site-btns" id="site-btns">
+          <span style="font-size:.78rem;color:var(--muted);font-family:sans-serif">読み込み中...</span>
+        </div>
+        <div id="art-links-box"></div>
       </div>
+
       <input class="paste-title-in" id="paste-title" type="text" placeholder="記事タイトル（任意）">
       <textarea class="paste-body" id="paste-body" placeholder="英語の記事本文をここに貼り付けてください..."></textarea>
       <button class="btn-start" onclick="startPaste()">📖 この記事を学習する</button>
@@ -606,11 +639,13 @@ function updateKeyUI() {
 /* ================================================================
    TABS
 ================================================================ */
+let siteBtnsInited = false;
 function switchTab(n) {
   document.getElementById('tab1').className = 'tab' + (n===1?' active':'');
   document.getElementById('tab2').className = 'tab' + (n===2?' active':'');
   document.getElementById('pane1').className = 'tab-pane' + (n===1?'':' hidden');
   document.getElementById('pane2').className = 'tab-pane' + (n===2?'':' hidden');
+  if (n === 2 && !siteBtnsInited) { siteBtnsInited = true; initSiteBtns(); }
 }
 
 /* ================================================================
@@ -1001,6 +1036,141 @@ document.addEventListener('click', e => {
   const p = document.getElementById('popup');
   if (!p.classList.contains('hidden') && !p.contains(e.target)) closePopup();
 });
+
+/* ================================================================
+   FREE NEWS LINKS  — RSS取得 → 記事リスト表示
+================================================================ */
+const FREE_SITES = [
+  {
+    name: 'BBC Business',
+    color: '#bb1919',
+    url: 'https://www.bbc.com/news/business',
+    rss: 'https://feeds.bbci.co.uk/news/business/rss.xml',
+  },
+  {
+    name: 'CNBC Economy',
+    color: '#0070c8',
+    url: 'https://www.cnbc.com/economy/',
+    rss: 'https://www.cnbc.com/id/20910258/device/rss/rss.html',
+  },
+  {
+    name: 'Reuters',
+    color: '#e05800',
+    url: 'https://www.reuters.com/business/',
+    rss: 'https://feeds.reuters.com/reuters/businessNews',
+  },
+  {
+    name: 'AP News',
+    color: '#c8102e',
+    url: 'https://apnews.com/business',
+    rss: null,
+  },
+  {
+    name: 'MarketWatch',
+    color: '#14844a',
+    url: 'https://www.marketwatch.com/latest-news',
+    rss: 'https://feeds.marketwatch.com/marketwatch/marketpulse/',
+  },
+  {
+    name: 'Investopedia',
+    color: '#1a5276',
+    url: 'https://www.investopedia.com/news/',
+    rss: null,
+  },
+];
+let freeSiteIdx  = 0;
+const freeSiteCache = {};
+
+function initSiteBtns() {
+  const btns = document.getElementById('site-btns');
+  if (!btns) return;
+  btns.innerHTML = FREE_SITES.map((s, i) =>
+    `<button class="site-btn" id="sb-site-${i}" onclick="selectSite(${i})"
+      style="border-color:${s.color};color:${s.color}">${s.name}</button>`
+  ).join('');
+  selectSite(0);
+}
+
+function selectSite(i) {
+  freeSiteIdx = i;
+  FREE_SITES.forEach((s, j) => {
+    const b = document.getElementById(`sb-site-${j}`);
+    if (!b) return;
+    if (j === i) {
+      b.style.cssText = `background:${s.color};color:#fff;border-color:${s.color}`;
+    } else {
+      b.style.cssText = `border-color:${s.color};color:${s.color}`;
+    }
+  });
+  loadSiteArticles(i);
+}
+
+async function loadSiteArticles(i) {
+  const box = document.getElementById('art-links-box');
+  if (!box) return;
+  const s = FREE_SITES[i];
+
+  // キャッシュがあれば即表示
+  if (freeSiteCache[i]) { renderArtLinks(freeSiteCache[i], s); return; }
+
+  // RSSなしのサイトはリンクボタンのみ表示
+  if (!s.rss) {
+    box.innerHTML = `<a href="${esc(s.url)}" target="_blank" rel="noopener" class="art-links-direct">
+      <span style="font-size:.88rem">🔗 ${esc(s.name)} のサイトを開く</span>
+      <span style="font-size:.76rem;color:var(--muted)">記事をコピー → 下に貼り付け</span>
+    </a>`;
+    return;
+  }
+
+  box.innerHTML = '<div class="art-links-loading"><div class="spinner"></div>記事を読み込み中...</div>';
+  try {
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(s.rss)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(9000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const xml = await res.text();
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const items = [...doc.querySelectorAll('item')].slice(0, 12).map(item => {
+      // linkタグかguidタグからURLを取得
+      const linkText = item.querySelector('link')?.textContent?.trim() || '';
+      const guidText = item.querySelector('guid')?.textContent?.trim() || '';
+      const link = linkText.startsWith('http') ? linkText : (guidText.startsWith('http') ? guidText : '');
+      return {
+        title: item.querySelector('title')?.textContent?.trim() || '',
+        link,
+        date: item.querySelector('pubDate')?.textContent?.trim() || '',
+      };
+    }).filter(it => it.title && it.link);
+
+    if (!items.length) throw new Error('no items');
+    freeSiteCache[i] = items;
+    renderArtLinks(items, s);
+  } catch(_) {
+    box.innerHTML = `<div class="art-links-err">
+      記事の取得に失敗しました。<br>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--accent)">
+        ${esc(s.name)} のサイトを直接開く →
+      </a>
+    </div>`;
+  }
+}
+
+function renderArtLinks(items, s) {
+  const box = document.getElementById('art-links-box');
+  if (!box) return;
+  const fmtPub = ds => {
+    if (!ds) return '';
+    try {
+      return new Date(ds).toLocaleDateString('ja-JP', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    } catch { return ''; }
+  };
+  box.innerHTML = `<div class="art-links-list">` +
+    items.map(it => `
+      <a href="${esc(it.link)}" target="_blank" rel="noopener" class="art-link-item">
+        <span class="art-link-title">${esc(it.title)}</span>
+        <span class="art-link-date">${fmtPub(it.date)}</span>
+      </a>`).join('') +
+    `</div>`;
+}
 
 /* ================================================================
    TRANSLATION  — Google gtx primary, MyMemory fallback
