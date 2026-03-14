@@ -1051,13 +1051,13 @@ const FREE_SITES = [
     name: 'CNBC Economy',
     color: '#0070c8',
     url: 'https://www.cnbc.com/economy/',
-    rss: 'https://www.cnbc.com/id/20910258/device/rss/rss.html',
+    rss: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258',
   },
   {
     name: 'Reuters',
     color: '#e05800',
     url: 'https://www.reuters.com/business/',
-    rss: 'https://feeds.reuters.com/reuters/businessNews',
+    rss: 'https://news.google.com/rss/search?q=site:reuters.com+business&hl=en-US&gl=US&ceid=US:en',
   },
   {
     name: 'AP News',
@@ -1069,7 +1069,7 @@ const FREE_SITES = [
     name: 'MarketWatch',
     color: '#14844a',
     url: 'https://www.marketwatch.com/latest-news',
-    rss: 'https://feeds.marketwatch.com/marketwatch/marketpulse/',
+    rss: 'https://news.google.com/rss/search?q=site:marketwatch.com+markets&hl=en-US&gl=US&ceid=US:en',
   },
   {
     name: 'Investopedia',
@@ -1105,6 +1105,23 @@ function selectSite(i) {
   loadSiteArticles(i);
 }
 
+async function fetchRSS(rssUrl) {
+  const proxies = [
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  ];
+  for (const makeProxy of proxies) {
+    try {
+      const res = await fetch(makeProxy(rssUrl), { signal: AbortSignal.timeout(9000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text && text.length > 200) return text;
+    } catch (_) { /* 次のプロキシを試す */ }
+  }
+  throw new Error('all proxies failed');
+}
+
 async function loadSiteArticles(i) {
   const box = document.getElementById('art-links-box');
   if (!box) return;
@@ -1124,10 +1141,7 @@ async function loadSiteArticles(i) {
 
   box.innerHTML = '<div class="art-links-loading"><div class="spinner"></div>記事を読み込み中...</div>';
   try {
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(s.rss)}`;
-    const res = await fetch(proxy, { signal: AbortSignal.timeout(9000) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const xml = await res.text();
+    const xml = await fetchRSS(s.rss);
     const doc = new DOMParser().parseFromString(xml, 'text/xml');
     const items = [...doc.querySelectorAll('item')].slice(0, 12).map(item => {
       // linkタグかguidタグからURLを取得
