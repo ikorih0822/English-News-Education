@@ -170,6 +170,21 @@
     }
     .btn-start:hover { background: #1d4ed8; transform: translateY(-1px); }
 
+    /* ══ SAVED ARTICLES ══ */
+    .saved-block { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 10px; margin-top: 24px; }
+    .saved-block-hd { font-size: .9rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; font-family: sans-serif; display: flex; align-items: center; justify-content: space-between; }
+    .saved-block-sub { font-size: .76rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+    .saved-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .saved-item { display: flex; align-items: center; gap: 10px; padding: 10px 13px; background: #fff; border-bottom: 1px solid var(--border); }
+    .saved-item:last-child { border-bottom: none; }
+    .saved-item-info { flex: 1; min-width: 0; cursor: pointer; }
+    .saved-item-info:hover .saved-item-title { color: var(--accent); }
+    .saved-item-title { font-size: .84rem; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .saved-item-meta { font-size: .71rem; color: var(--muted); font-family: sans-serif; margin-top: 2px; }
+    .saved-del-btn { background: none; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; padding: 3px 9px; font-size: .72rem; cursor: pointer; font-family: sans-serif; white-space: nowrap; flex-shrink: 0; transition: background .15s; }
+    .saved-del-btn:hover { background: #fee2e2; }
+    .saved-empty { padding: 18px; text-align: center; color: var(--muted); font-size: .83rem; font-family: sans-serif; }
+
     /* ══ ARTICLE SCREEN ══ */
     .art-hdr {
       background: linear-gradient(135deg, #1e3a5f, #2563eb);
@@ -481,6 +496,16 @@
       <input class="paste-title-in" id="paste-title" type="text" placeholder="記事タイトル（任意）">
       <textarea class="paste-body" id="paste-body" placeholder="英語の記事本文をここに貼り付けてください..."></textarea>
       <button class="btn-start" onclick="startPaste()">📖 この記事を学習する</button>
+
+      <!-- 保存済み記事 -->
+      <div class="saved-block">
+        <div class="saved-block-hd">
+          <span>💾 保存済み記事</span>
+          <span id="saved-count" style="font-size:.75rem;color:var(--muted);font-weight:400"></span>
+        </div>
+        <div class="saved-block-sub">学習した記事は自動で保存されます（最大20件）。タップで再学習できます。</div>
+        <div id="saved-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -646,6 +671,7 @@ function switchTab(n) {
   document.getElementById('pane1').className = 'tab-pane' + (n===1?'':' hidden');
   document.getElementById('pane2').className = 'tab-pane' + (n===2?'':' hidden');
   if (n === 2 && !siteBtnsInited) { siteBtnsInited = true; initSiteBtns(); }
+  if (n === 2) renderSavedArticles();
 }
 
 /* ================================================================
@@ -732,8 +758,66 @@ function startPaste() {
   const body  = document.getElementById('paste-body').value.trim();
   if (!body || body.length < 30) { alert('記事本文を貼り付けてください。'); return; }
   curArt = { title, titleJa: '', bodyText: body, webUrl: '', date: new Date().toISOString(), wordcount: body.split(/\s+/).filter(Boolean).length, source: '貼り付け記事' };
+  saveArticleToStorage(curArt);
   sentCache = {}; curSents = {}; fullTlCache = null;
   showArticleScreen();
+}
+
+/* ================================================================
+   SAVED ARTICLES — localStorage管理（最大20件）
+================================================================ */
+const SAVED_KEY = 'savedPasteArticles';
+const SAVED_MAX = 20;
+
+function loadSavedArticles() {
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); }
+  catch (_) { return []; }
+}
+
+function saveArticleToStorage(art) {
+  const list = loadSavedArticles().filter(a => a.id !== art.id);
+  const entry = { id: art.date, title: art.title, body: art.bodyText, date: art.date, wordcount: art.wordcount };
+  list.unshift(entry);
+  if (list.length > SAVED_MAX) list.splice(SAVED_MAX);
+  localStorage.setItem(SAVED_KEY, JSON.stringify(list));
+  renderSavedArticles();
+}
+
+function deleteSavedArticle(id) {
+  const list = loadSavedArticles().filter(a => a.id !== id);
+  localStorage.setItem(SAVED_KEY, JSON.stringify(list));
+  renderSavedArticles();
+}
+
+function openSavedArticle(id) {
+  const art = loadSavedArticles().find(a => a.id === id);
+  if (!art) return;
+  curArt = { title: art.title, titleJa: '', bodyText: art.body, webUrl: '', date: art.date, wordcount: art.wordcount, source: '保存済み記事' };
+  sentCache = {}; curSents = {}; fullTlCache = null;
+  showArticleScreen();
+}
+
+function renderSavedArticles() {
+  const list = loadSavedArticles();
+  const el = document.getElementById('saved-list');
+  const countEl = document.getElementById('saved-count');
+  if (!el) return;
+  if (countEl) countEl.textContent = `${list.length} / ${SAVED_MAX}件`;
+  if (!list.length) {
+    el.innerHTML = '<div class="saved-empty">保存済み記事はありません</div>';
+    return;
+  }
+  el.innerHTML = '<div class="saved-list">' + list.map(a => {
+    const d = new Date(a.date);
+    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    return `<div class="saved-item">
+      <div class="saved-item-info" onclick="openSavedArticle(${JSON.stringify(a.id)})">
+        <div class="saved-item-title">${esc(a.title)}</div>
+        <div class="saved-item-meta">${dateStr}　${a.wordcount.toLocaleString()}語</div>
+      </div>
+      <button class="saved-del-btn" onclick="deleteSavedArticle(${JSON.stringify(a.id)})">削除</button>
+    </div>`;
+  }).join('') + '</div>';
 }
 
 /* ================================================================
@@ -1291,6 +1375,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 updateKeyUI();
 if (apiKey) document.getElementById('key-input').value = apiKey;
 loadNews();
+renderSavedArticles();
 </script>
 </body>
 </html>
