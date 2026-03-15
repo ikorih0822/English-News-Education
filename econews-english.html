@@ -811,11 +811,11 @@ function renderSavedArticles() {
     const d = new Date(a.date);
     const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
     return `<div class="saved-item">
-      <div class="saved-item-info" onclick="openSavedArticle(${JSON.stringify(a.id)})">
+      <div class="saved-item-info" onclick='openSavedArticle(${JSON.stringify(a.id)})'>
         <div class="saved-item-title">${esc(a.title)}</div>
         <div class="saved-item-meta">${dateStr}　${a.wordcount.toLocaleString()}語</div>
       </div>
-      <button class="saved-del-btn" onclick="deleteSavedArticle(${JSON.stringify(a.id)})">削除</button>
+      <button class="saved-del-btn" onclick='deleteSavedArticle(${JSON.stringify(a.id)})'>削除</button>
     </div>`;
   }).join('') + '</div>';
 }
